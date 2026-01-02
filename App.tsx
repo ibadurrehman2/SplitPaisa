@@ -1,13 +1,17 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { User, Group, Expense, Settlement, Category } from './types';
-import { Home, Users, PlusCircle, CreditCard, User as UserIcon } from 'lucide-react';
+import { User, Group, Expense, Settlement, Category, AppNotification } from './types';
+import { Home, Users, PlusCircle, CreditCard, User as UserIcon, History } from 'lucide-react';
 import Dashboard from './screens/Dashboard';
 import Groups from './screens/Groups';
 import AddExpense from './screens/AddExpense';
 import Settlements from './screens/Settlements';
 import Profile from './screens/Profile';
 import Auth from './screens/Auth';
+import SearchScreen from './screens/Search';
+import NotificationsScreen from './screens/Notifications';
+import AllBalancesScreen from './screens/AllBalances';
+import HistoryScreen from './screens/History';
 
 // --- Context Definitions ---
 interface AppContextType {
@@ -19,11 +23,18 @@ interface AppContextType {
   groups: Group[];
   expenses: Expense[];
   settlements: Settlement[];
+  notifications: AppNotification[];
   addExpense: (e: Expense) => void;
+  updateExpense: (e: Expense) => void;
   addSettlement: (s: Settlement) => void;
   addGroup: (g: Group) => void;
   updateGroup: (g: Group) => void;
   deleteGroup: (id: string) => void;
+  activeTab: string;
+  setActiveTab: (tab: 'home' | 'groups' | 'history' | 'add' | 'settle' | 'profile' | 'search' | 'notifications' | 'allBalances') => void;
+  editingExpense: Expense | null;
+  setEditingExpense: (e: Expense | null) => void;
+  markNotificationsRead: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -37,11 +48,13 @@ export const useApp = () => {
 // --- App Component ---
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'home' | 'groups' | 'add' | 'settle' | 'profile'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'groups' | 'history' | 'add' | 'settle' | 'profile' | 'search' | 'notifications' | 'allBalances'>('home');
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   const addUser = (u: User) => setUsers(prev => [...prev, u]);
   
@@ -52,16 +65,68 @@ export default function App() {
     }
   };
 
-  const addExpense = (e: Expense) => setExpenses(prev => [e, ...prev]);
-  const addSettlement = (s: Settlement) => setSettlements(prev => [s, ...prev]);
-  const addGroup = (g: Group) => setGroups(prev => [...prev, g]);
+  const addNotification = (notif: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
+    const newNotif: AppNotification = {
+      ...notif,
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: Date.now(),
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  const markNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const addExpense = (e: Expense) => {
+    setExpenses(prev => [e, ...prev]);
+    const group = groups.find(g => g.id === e.groupId);
+    addNotification({
+      title: 'New Expense',
+      description: `₹${e.amount} spent for "${e.title}" in ${group?.name || 'a group'}`,
+      type: 'expense',
+      fromUserId: e.paidBy
+    });
+  };
+  
+  const updateExpense = (updatedExpense: Expense) => {
+    setExpenses(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+    addNotification({
+      title: 'Expense Updated',
+      description: `"${updatedExpense.title}" has been modified`,
+      type: 'expense',
+      fromUserId: currentUser?.id
+    });
+  };
+
+  const addSettlement = (s: Settlement) => {
+    setSettlements(prev => [s, ...prev]);
+    const fromUser = users.find(u => u.id === s.from);
+    const toUser = users.find(u => u.id === s.to);
+    addNotification({
+      title: 'Settlement Recorded',
+      description: `${fromUser?.name} paid ${toUser?.name} ₹${s.amount}`,
+      type: 'settlement',
+      fromUserId: s.from
+    });
+  };
+
+  const addGroup = (g: Group) => {
+    setGroups(prev => [...prev, g]);
+    addNotification({
+      title: 'New Group Created',
+      description: `You created the group "${g.name}"`,
+      type: 'group',
+      fromUserId: currentUser?.id
+    });
+  };
 
   if (!currentUser) {
     return (
       <Auth 
         users={users} 
         onLogin={(user) => {
-          // If the user is new (not in our current list), add them
           if (!users.find(u => u.id === user.id || u.phone === user.phone)) {
             addUser(user);
           }
@@ -85,17 +150,30 @@ export default function App() {
     switch (activeTab) {
       case 'home': return <Dashboard />;
       case 'groups': return <Groups />;
-      case 'add': return <AddExpense onComplete={() => setActiveTab('home')} />;
+      case 'history': return <HistoryScreen />;
+      case 'add': return (
+        <AddExpense 
+          initialExpense={editingExpense} 
+          onComplete={() => {
+            setEditingExpense(null);
+            setActiveTab('home');
+          }} 
+        />
+      );
       case 'settle': return <Settlements />;
       case 'profile': return <Profile />;
+      case 'search': return <SearchScreen />;
+      case 'notifications': return <NotificationsScreen />;
+      case 'allBalances': return <AllBalancesScreen />;
       default: return <Dashboard />;
     }
   };
 
   return (
     <AppContext.Provider value={{ 
-      currentUser, setCurrentUser, users, addUser, updateUser, groups, expenses, settlements, 
-      addExpense, addSettlement, addGroup, updateGroup, deleteGroup
+      currentUser, setCurrentUser, users, addUser, updateUser, groups, expenses, settlements, notifications,
+      addExpense, updateExpense, addSettlement, addGroup, updateGroup, deleteGroup,
+      activeTab, setActiveTab, editingExpense, setEditingExpense, markNotificationsRead
     }}>
       <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-xl overflow-hidden relative border-x border-slate-100">
         
@@ -106,7 +184,10 @@ export default function App() {
 
         {/* Floating Action Button (FAB) for Quick Add */}
         <button 
-          onClick={() => setActiveTab('add')}
+          onClick={() => {
+            setEditingExpense(null);
+            setActiveTab('add');
+          }}
           className={`absolute bottom-20 left-1/2 -translate-x-1/2 w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-indigo-100 transition-transform active:scale-90 z-20 ${activeTab === 'add' ? 'scale-110 rotate-45 bg-rose-500 shadow-rose-100' : ''}`}
         >
           <PlusCircle className="w-8 h-8" />
@@ -115,10 +196,10 @@ export default function App() {
         {/* Bottom Navigation Bar */}
         <nav className="h-20 bg-white border-t border-slate-200 flex items-center justify-around px-2 safe-area-bottom z-10">
           <NavItem icon={<Home />} label="Home" active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
-          <NavItem icon={<Users />} label="Groups" active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
+          <NavItem icon={<History />} label="History" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
           <div className="w-16"></div> {/* Spacer for FAB */}
-          <NavItem icon={<CreditCard />} label="Settle" active={activeTab === 'settle'} onClick={() => setActiveTab('settle')} />
-          <NavItem icon={<UserIcon />} label="Account" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
+          <NavItem icon={<Users />} label="Groups" active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
+          <NavItem icon={<UserIcon />} label="Profile" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
         </nav>
       </div>
     </AppContext.Provider>

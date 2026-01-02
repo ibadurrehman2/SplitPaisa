@@ -1,42 +1,64 @@
+
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
-import { Category, SplitMember } from '../types';
-import { CATEGORIES, FORMAT_CURRENCY } from '../constants';
+import { Category, SplitMember, Expense } from '../types';
+import { CATEGORIES, FORMAT_CURRENCY, UserAvatar } from '../constants';
 import { X, FileText, ChevronDown, Users, AlertCircle } from 'lucide-react';
 
-export default function AddExpense({ onComplete }: { onComplete: () => void }) {
-  const { currentUser, groups, users, addExpense } = useApp();
+interface AddExpenseProps {
+  onComplete: () => void;
+  initialExpense?: Expense | null;
+}
+
+export default function AddExpense({ onComplete, initialExpense }: AddExpenseProps) {
+  const { currentUser, groups, users, addExpense, updateExpense } = useApp();
   
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [selectedGroupId, setSelectedGroupId] = useState(groups[0]?.id || '');
-  const [category, setCategory] = useState<Category>('Food');
-  const [paidBy, setPaidBy] = useState(currentUser!.id);
-  const [splitType, setSplitType] = useState<'equal' | 'exact'>('equal');
-  const [customSplits, setCustomSplits] = useState<Record<string, string>>({});
+  const [title, setTitle] = useState(initialExpense?.title || '');
+  const [amount, setAmount] = useState(initialExpense?.amount.toString() || '');
+  const [selectedGroupId, setSelectedGroupId] = useState(initialExpense?.groupId || groups[0]?.id || '');
+  const [category, setCategory] = useState<Category>(initialExpense?.category || 'Food');
+  const [paidBy, setPaidBy] = useState(initialExpense?.paidBy || currentUser!.id);
+  const [splitType, setSplitType] = useState<'equal' | 'exact'>(
+    initialExpense ? 
+    (initialExpense.splits.every(s => Math.abs(s.amount - (initialExpense.amount / initialExpense.splits.length)) < 0.1) ? 'equal' : 'exact') 
+    : 'equal'
+  );
+  const [customSplits, setCustomSplits] = useState<Record<string, string>>(() => {
+    if (initialExpense) {
+      const splits: Record<string, string> = {};
+      initialExpense.splits.forEach(s => {
+        splits[s.userId] = s.amount.toString();
+      });
+      return splits;
+    }
+    return {};
+  });
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
   const groupMembers = users.filter(u => selectedGroup?.members.includes(u.id));
 
-  // Initialize custom splits when members or amount change
+  // Initialize custom splits when members change or when switching to exact split
   useEffect(() => {
     if (splitType === 'exact') {
-      const initialSplits: Record<string, string> = {};
+      const initialSplits: Record<string, string> = { ...customSplits };
       groupMembers.forEach(m => {
-        initialSplits[m.id] = customSplits[m.id] || '';
+        if (initialSplits[m.id] === undefined) {
+          initialSplits[m.id] = '';
+        }
       });
       setCustomSplits(initialSplits);
     }
-  }, [selectedGroupId, splitType]);
+  }, [selectedGroupId, splitType, groupMembers.length]);
 
   const totalAmount = parseFloat(amount) || 0;
-  // Fix: Explicitly type reduce parameters and return type to resolve unknown inference issues
-  // Using Object.keys and accessing values manually to ensure proper type inference as number
+  
   const currentSplitTotal: number = Object.keys(customSplits).reduce((sum: number, key: string): number => {
+    if (!groupMembers.find(m => m.id === key)) return sum; // Filter out people not in current group
     const val = customSplits[key];
     const parsedVal = parseFloat(val);
     return sum + (isNaN(parsedVal) ? 0 : parsedVal);
   }, 0);
+
   const isSplitValid = splitType === 'equal' || Math.abs(currentSplitTotal - totalAmount) < 0.01;
 
   const handleSave = () => {
@@ -54,16 +76,22 @@ export default function AddExpense({ onComplete }: { onComplete: () => void }) {
       }));
     }
 
-    addExpense({
-      id: Math.random().toString(36).substr(2, 9),
+    const expenseData: Expense = {
+      id: initialExpense?.id || Math.random().toString(36).substr(2, 9),
       groupId: selectedGroupId,
       title,
       amount: totalAmount,
-      date: new Date().toISOString(),
+      date: initialExpense?.date || new Date().toISOString(),
       category,
       paidBy,
       splits
-    });
+    };
+
+    if (initialExpense) {
+      updateExpense(expenseData);
+    } else {
+      addExpense(expenseData);
+    }
 
     onComplete();
   };
@@ -77,13 +105,13 @@ export default function AddExpense({ onComplete }: { onComplete: () => void }) {
       {/* Navbar */}
       <div className="p-4 border-b border-slate-100 flex items-center justify-between">
         <button onClick={onComplete} className="p-2 text-slate-400"><X className="w-6 h-6" /></button>
-        <h2 className="font-bold text-lg text-slate-800">Add Expense</h2>
+        <h2 className="font-bold text-lg text-slate-800">{initialExpense ? 'Edit Expense' : 'Add Expense'}</h2>
         <button 
           onClick={handleSave} 
           disabled={!title || totalAmount <= 0 || !isSplitValid}
           className={`p-2 font-bold transition-colors ${(!title || totalAmount <= 0 || !isSplitValid) ? 'text-slate-300' : 'text-indigo-600'}`}
         >
-          Save
+          {initialExpense ? 'Update' : 'Save'}
         </button>
       </div>
 
@@ -99,7 +127,7 @@ export default function AddExpense({ onComplete }: { onComplete: () => void }) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="text-5xl font-black w-48 text-center bg-transparent border-none outline-none placeholder:text-slate-200 text-slate-800"
-              autoFocus
+              autoFocus={!initialExpense}
             />
           </div>
         </div>
@@ -195,7 +223,7 @@ export default function AddExpense({ onComplete }: { onComplete: () => void }) {
                 {groupMembers.map(member => (
                   <div key={member.id} className="p-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <img src={member.avatar} className="w-8 h-8 rounded-full bg-slate-100" />
+                      <UserAvatar user={member} className="w-8 h-8" />
                       <span className="text-sm font-semibold text-slate-700">{member.name}</span>
                     </div>
                     <div className="flex items-center bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 focus-within:border-indigo-300 transition-colors">
@@ -220,13 +248,13 @@ export default function AddExpense({ onComplete }: { onComplete: () => void }) {
           )}
         </div>
 
-        {/* Quick Save */}
+        {/* Action Button */}
         <button 
           onClick={handleSave}
           disabled={!title || totalAmount <= 0 || !isSplitValid}
           className={`w-full py-4 rounded-3xl font-bold text-lg shadow-xl transition-all mt-4 active:scale-95 ${(!title || totalAmount <= 0 || !isSplitValid) ? 'bg-slate-100 text-slate-300 shadow-none' : 'bg-indigo-600 text-white shadow-indigo-100'}`}
         >
-          Add Expense
+          {initialExpense ? 'Update Expense' : 'Add Expense'}
         </button>
       </div>
     </div>

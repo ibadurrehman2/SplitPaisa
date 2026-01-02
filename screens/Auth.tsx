@@ -39,7 +39,7 @@ export default function Auth({ users, onLogin }: AuthProps) {
         id: 'u-' + Math.random().toString(36).substr(2, 9),
         name: name.trim(),
         phone: phone,
-        avatar: `https://picsum.photos/seed/${name.trim().replace(/\s/g, '')}/100`
+        avatar: '' // Set to empty string so Profile page can show initials placeholder
       });
     }
   };

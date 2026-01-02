@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../App';
 import { Group, User } from '../types';
-import { X, Check, Plane, Home, Briefcase, Users, Search, AlignLeft, Trash2, UserPlus, Phone, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { UserAvatar } from '../constants';
+import { X, Check, Plane, Home, Briefcase, Users, Search, AlignLeft, Trash2, UserPlus, Phone, User as UserIcon, AlertTriangle, UserMinus } from 'lucide-react';
 
 interface CreateGroupProps {
   onComplete: () => void;
@@ -49,7 +50,7 @@ export default function CreateGroup({ onComplete, initialGroup }: CreateGroupPro
       id: 'u-' + Math.random().toString(36).substr(2, 9),
       name: newContactName.trim(),
       phone: newContactPhone,
-      avatar: `https://picsum.photos/seed/${newContactName.trim().replace(/\s/g, '')}/100`
+      avatar: '' // Empty avatar to trigger Initials Placeholder
     };
 
     addUser(newUser);
@@ -215,7 +216,7 @@ export default function CreateGroup({ onComplete, initialGroup }: CreateGroupPro
           <div className="space-y-2">
             <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-50/50 border border-indigo-100">
               <div className="flex items-center space-x-3">
-                <img src={currentUser?.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                <UserAvatar user={currentUser || undefined} className="w-10 h-10" />
                 <div>
                   <p className="font-bold text-sm text-slate-800">{currentUser?.name} (You)</p>
                   <p className="text-slate-400 text-xs">Organizer</p>
@@ -232,14 +233,18 @@ export default function CreateGroup({ onComplete, initialGroup }: CreateGroupPro
               return (
                 <div key={user.id} className="flex items-center justify-between p-3 rounded-2xl border border-indigo-100 bg-white shadow-sm animate-in fade-in duration-300">
                   <div className="flex items-center space-x-3">
-                    <img src={user.avatar} className="w-10 h-10 rounded-full bg-slate-100" />
+                    <UserAvatar user={user} className="w-10 h-10" />
                     <div>
                       <p className="font-bold text-sm text-slate-800">{user.name}</p>
                       <p className="text-slate-400 text-xs">+91 {user.phone}</p>
                     </div>
                   </div>
-                  <button onClick={() => toggleMember(user.id)} className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
+                  <button 
+                    onClick={() => toggleMember(user.id)} 
+                    className="w-9 h-9 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center hover:bg-rose-100 transition-colors"
+                    title="Remove member"
+                  >
+                    <UserMinus className="w-4 h-4" />
                   </button>
                 </div>
               );
@@ -252,13 +257,15 @@ export default function CreateGroup({ onComplete, initialGroup }: CreateGroupPro
                 className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-100 bg-white active:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <img src={user.avatar} className="w-10 h-10 rounded-full grayscale-[0.5]" />
+                  <UserAvatar user={user} className="w-10 h-10 opacity-70" />
                   <div className="text-left">
                     <p className="font-bold text-sm text-slate-700">{user.name}</p>
                     <p className="text-slate-400 text-xs">+91 {user.phone}</p>
                   </div>
                 </div>
-                <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center" />
+                <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center">
+                   <UserPlus className="w-3 h-3 text-slate-400" />
+                </div>
               </button>
             ))}
           </div>

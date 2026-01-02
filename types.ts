@@ -49,3 +49,13 @@ export interface Balance {
   userId: string;
   amount: number; // Positive means user is owed, negative means user owes
 }
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: number;
+  type: 'expense' | 'settlement' | 'group';
+  read: boolean;
+  fromUserId?: string; // New field for avatar consistency
+}
