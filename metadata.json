@@ -1,0 +1,7 @@
+{
+  "name": "SplitPaisa - Smart Expense Sharing",
+  "description": "A sophisticated Splitwise-like expense sharing app for Indian users with INR support, group management, and smart settlement algorithms.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
